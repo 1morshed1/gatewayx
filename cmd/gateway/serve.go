@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/1morshed1/gatewayx/internal/admin"
 	"github.com/1morshed1/gatewayx/internal/circuitbreaker"
 	"github.com/1morshed1/gatewayx/internal/config"
 	"github.com/1morshed1/gatewayx/internal/loadbalancer"
@@ -69,6 +70,36 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 		log,
 	)
 
+	// --- hot config reload ---
+	// reload re-reads the route table from Postgres and atomically swaps it into
+	// the live router. Called on NOTIFY (or on a poll tick), and by admin after a
+	// mutation for immediate local consistency.
+	reload := func() error {
+		fresh, err := st.LoadRoutes(ctx)
+		if err != nil {
+			return err
+		}
+		router.Update(fresh)
+		log.Info("route table reloaded", "count", len(fresh))
+		return nil
+	}
+	go func() {
+		var werr error
+		if cfg.ReloadMode == "poll" {
+			log.Info("watching config", "mode", "poll", "interval", cfg.PollInterval)
+			werr = st.WatchPoll(ctx, cfg.PollInterval, func() { _ = reload() })
+		} else {
+			log.Info("watching config", "mode", "listen")
+			werr = st.WatchListen(ctx, func() { _ = reload() })
+		}
+		if werr != nil && ctx.Err() == nil {
+			log.Error("config watcher stopped", "err", werr)
+		}
+	}()
+
+	// --- admin API ---
+	adminAPI := admin.New(st, router, reload, cfg.AdminToken, log)
+
 	// --- HTTP servers ---
 	gatewaySrv := &http.Server{
 		Addr:              cfg.GatewayAddr,
@@ -77,7 +108,7 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	}
 	adminSrv := &http.Server{
 		Addr:              cfg.AdminAddr,
-		Handler:           newAdminMux(router),
+		Handler:           adminAPI.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -123,19 +154,4 @@ func newUpstreamTransport(cfg *config.Config) http.RoundTripper {
 		ResponseHeaderTimeout: cfg.UpstreamTimeout,
 		ForceAttemptHTTP2:     true,
 	}
-}
-
-// newAdminMux is a placeholder admin server. Phase 6 replaces it with full CRUD.
-// For now it exposes health and a read-only route dump so the server is useful
-// immediately.
-func newAdminMux(router *proxy.Router) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
-	mux.HandleFunc("/admin/routes", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, router.Routes())
-	})
-	return mux
 }

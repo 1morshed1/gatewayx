@@ -34,6 +34,9 @@ type Config struct {
 
 	LogLevel string
 
+	// AdminToken, when set, is required (as X-Admin-Token) on admin mutations.
+	AdminToken string
+
 	// ReloadMode is "listen" (Postgres LISTEN/NOTIFY) or "poll".
 	ReloadMode   string
 	PollInterval time.Duration
@@ -66,6 +69,7 @@ func Load() (*Config, error) {
 		KafkaTopic:      env("KAFKA_TOPIC", "request-logs"),
 		KafkaEnabled:    envBool("KAFKA_ENABLED", true),
 		LogLevel:        env("LOG_LEVEL", "info"),
+		AdminToken:      env("ADMIN_TOKEN", ""),
 		ReloadMode:      env("CONFIG_RELOAD_MODE", "listen"),
 		PollInterval:    envDuration("CONFIG_POLL_INTERVAL", 15*time.Second),
 		UpstreamTimeout: envDuration("UPSTREAM_TIMEOUT", 30*time.Second),
