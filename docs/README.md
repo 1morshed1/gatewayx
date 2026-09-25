@@ -17,6 +17,8 @@ how an API gateway works by building one, read straight through.
 | 08 | [Analytics with Kafka](08-analytics.md) | Fire-and-forget event streaming, the request-log schema |
 | 09 | [Observability](09-observability.md) | Prometheus metrics, structured logging, what to measure |
 | 10 | [Load testing](10-load-testing.md) | k6 scenarios: throughput, latency overhead, limiter accuracy |
+| 11 | [Transform plugin](11-transform-plugin.md) | Header/path/body transformation; why body transform is opt-in |
+| 12 | [Spark analytics job](12-spark-analytics.md) | Batch reports over the request-logs topic (top consumers, error rates) |
 
 ## Decision log
 

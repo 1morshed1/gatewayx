@@ -9,6 +9,7 @@ import (
 	"github.com/1morshed1/gatewayx/internal/plugin/plugins/auth"
 	"github.com/1morshed1/gatewayx/internal/plugin/plugins/ratelimit"
 	"github.com/1morshed1/gatewayx/internal/plugin/plugins/requestid"
+	"github.com/1morshed1/gatewayx/internal/plugin/plugins/transform"
 	rl "github.com/1morshed1/gatewayx/internal/ratelimit"
 	"github.com/1morshed1/gatewayx/internal/store"
 )
@@ -32,7 +33,7 @@ func buildRegistry(deps pluginDeps) *plugin.Registry {
 	reg.Register(requestid.Name, requestid.New())
 	reg.Register(auth.Name, auth.New(deps.store))
 	reg.Register(ratelimit.Name, ratelimit.New(limiter))
-	// reg.Register(transform.Name, transform.New())   (next in phase 4)
+	reg.Register(transform.Name, transform.New())
 
 	return reg
 }

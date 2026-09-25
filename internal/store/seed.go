@@ -60,6 +60,7 @@ func (s *Store) SeedDemo(ctx context.Context) error {
 		{"request-id", `{"header":"X-Request-ID"}`},
 		{"auth", `{"header":"X-API-Key"}`},
 		{"rate-limit", `{"limit":5,"window":"10s"}`},
+		{"transform", `{"request":{"headers":{"set":{"X-Gateway-Env":"demo"}}},"response":{"headers":{"set":{"X-Powered-By":"gatewayx"}}}}`},
 	}
 	for _, pl := range plugins {
 		if _, err := tx.Exec(ctx, `
