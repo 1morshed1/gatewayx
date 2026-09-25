@@ -51,13 +51,22 @@ func (s *Store) SeedDemo(ctx context.Context) error {
 		}
 	}
 
-	// Plugins: enable the request-id plugin so every proxied request gets a
-	// correlation header. More plugins are added to this demo in later phases.
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO route_plugins (route_id, name, enabled, config)
-		VALUES ($1, 'request-id', true, '{"header":"X-Request-ID"}'::jsonb)`,
-		routeID); err != nil {
-		return fmt.Errorf("seed plugin request-id: %w", err)
+	// Plugins: request-id (correlation), auth (require the demo API key), and a
+	// deliberately small rate limit so you can trip a 429 by hand in the demo.
+	plugins := []struct {
+		name   string
+		config string
+	}{
+		{"request-id", `{"header":"X-Request-ID"}`},
+		{"auth", `{"header":"X-API-Key"}`},
+		{"rate-limit", `{"limit":5,"window":"10s"}`},
+	}
+	for _, pl := range plugins {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO route_plugins (route_id, name, enabled, config)
+			VALUES ($1, $2, true, $3::jsonb)`, routeID, pl.name, pl.config); err != nil {
+			return fmt.Errorf("seed plugin %s: %w", pl.name, err)
+		}
 	}
 
 	return tx.Commit(ctx)

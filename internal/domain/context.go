@@ -30,7 +30,23 @@ type RequestContext struct {
 	aborted     bool
 	abortStatus int
 	abortBody   any
+
+	respHeader http.Header
 }
+
+// ResponseHeader returns a lazily-created header map for headers a plugin wants on
+// the client response. On a normal (proxied) response these are copied onto the
+// upstream response; on an aborted response the gateway writes them directly. This
+// is how, e.g., the rate limiter attaches Retry-After to a 429.
+func (c *RequestContext) ResponseHeader() http.Header {
+	if c.respHeader == nil {
+		c.respHeader = make(http.Header)
+	}
+	return c.respHeader
+}
+
+// ResponseHeaders returns the accumulated headers, or nil if none were set.
+func (c *RequestContext) ResponseHeaders() http.Header { return c.respHeader }
 
 // NewRequestContext builds a fresh context for a request against a route.
 func NewRequestContext(r *http.Request, route *Route) *RequestContext {

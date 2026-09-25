@@ -97,6 +97,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	chain.OnRequest(rc)
 	if rc.Aborted() {
 		status, body := rc.AbortResult()
+		copyHeaders(w.Header(), rc.ResponseHeaders())
 		g.writeJSON(w, status, body)
 		return
 	}
@@ -170,6 +171,10 @@ func (g *Gateway) modifyResponse(resp *http.Response) error {
 	if st == nil {
 		return nil
 	}
+	// Carry any headers plugins accumulated on the request phase onto the real
+	// response (e.g. rate-limit headers on a successful request).
+	copyHeaders(resp.Header, st.rc.ResponseHeaders())
+
 	respCtx := &domain.ResponseContext{
 		Request:  st.rc.Request,
 		Response: resp,
@@ -204,6 +209,15 @@ func (g *Gateway) writeJSON(w http.ResponseWriter, status int, body any) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// copyHeaders copies all values from src into dst. No-op when src is nil.
+func copyHeaders(dst, src http.Header) {
+	for k, vals := range src {
+		for _, v := range vals {
+			dst.Add(k, v)
+		}
+	}
 }
 
 // hostOnly strips any :port from the Host header for host matching.

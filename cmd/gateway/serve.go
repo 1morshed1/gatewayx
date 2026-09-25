@@ -10,6 +10,7 @@ import (
 	"github.com/1morshed1/gatewayx/internal/config"
 	"github.com/1morshed1/gatewayx/internal/plugin"
 	"github.com/1morshed1/gatewayx/internal/proxy"
+	"github.com/1morshed1/gatewayx/internal/redisx"
 	"github.com/1morshed1/gatewayx/internal/store"
 )
 
@@ -36,8 +37,15 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	router.Update(routes)
 	log.Info("loaded routes", "count", len(routes))
 
+	// --- redis (rate limit + circuit breaker state) ---
+	rdb, err := redisx.New(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	if err != nil {
+		return err
+	}
+	defer rdb.Close()
+
 	// --- plugin system ---
-	registry := buildRegistry(pluginDeps{log: log})
+	registry := buildRegistry(pluginDeps{log: log, redis: rdb, store: st})
 	chains := plugin.NewChainFactory(registry, log)
 	log.Info("registered plugins", "plugins", registry.Names())
 
