@@ -1,6 +1,6 @@
 # Multi-stage build for the demo upstream echo service.
 # Stage 1 compiles a static binary; stage 2 ships it on a scratch-like base.
-FROM golang:1.24-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 # Only go.mod first for layer caching. The echo service has no external deps,
 # so go.sum may be absent; copy it opportunistically.
