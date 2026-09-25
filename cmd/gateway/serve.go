@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/1morshed1/gatewayx/internal/circuitbreaker"
 	"github.com/1morshed1/gatewayx/internal/config"
 	"github.com/1morshed1/gatewayx/internal/plugin"
 	"github.com/1morshed1/gatewayx/internal/proxy"
@@ -49,13 +50,21 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	chains := plugin.NewChainFactory(registry, log)
 	log.Info("registered plugins", "plugins", registry.Names())
 
+	// --- circuit breaker (wraps the upstream transport) ---
+	cbMgr := circuitbreaker.NewManager(rdb, circuitbreaker.Config{
+		FailureThreshold: cfg.CBFailureThreshold,
+		OpenTimeout:      cfg.CBOpenTimeout,
+		Window:           cfg.CBWindow,
+	})
+	transport := circuitbreaker.NewTransport(newUpstreamTransport(cfg), cbMgr)
+
 	// --- gateway core ---
 	// TODO(phase 5): swap FirstHealthyBalancer for the real load balancer.
 	gw := proxy.New(
 		router,
 		chains,
 		proxy.FirstHealthyBalancer{},
-		newUpstreamTransport(cfg),
+		transport,
 		proxy.Options{DefaultTimeout: cfg.UpstreamTimeout},
 		log,
 	)

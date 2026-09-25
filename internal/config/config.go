@@ -41,6 +41,11 @@ type Config struct {
 	// UpstreamTimeout is the default per-request timeout when a route does not
 	// set its own.
 	UpstreamTimeout time.Duration
+
+	// Circuit breaker defaults (per upstream host).
+	CBFailureThreshold int           // failures within CBWindow before opening
+	CBOpenTimeout      time.Duration // how long to stay open before probing
+	CBWindow           time.Duration // rolling window over which failures are counted
 }
 
 // Load reads configuration from the environment. If a .env file exists in the
@@ -64,6 +69,10 @@ func Load() (*Config, error) {
 		ReloadMode:      env("CONFIG_RELOAD_MODE", "listen"),
 		PollInterval:    envDuration("CONFIG_POLL_INTERVAL", 15*time.Second),
 		UpstreamTimeout: envDuration("UPSTREAM_TIMEOUT", 30*time.Second),
+
+		CBFailureThreshold: envInt("CB_FAILURE_THRESHOLD", 5),
+		CBOpenTimeout:      envDuration("CB_OPEN_TIMEOUT", 30*time.Second),
+		CBWindow:           envDuration("CB_WINDOW", 30*time.Second),
 	}
 
 	if cfg.ReloadMode != "listen" && cfg.ReloadMode != "poll" {
