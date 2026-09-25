@@ -49,6 +49,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /admin/consumers/{id}", a.requireToken(a.deleteConsumer))
 
 	mux.HandleFunc("POST /admin/reload", a.requireToken(a.forceReload))
+	mux.HandleFunc("GET /admin/analytics", a.analytics)
 
 	return mux
 }
@@ -187,6 +188,18 @@ func (a *API) deleteConsumer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// analytics returns per-route request/error/latency rollups for the last 24h,
+// computed from the aggregate table the analytics consumer populates.
+func (a *API) analytics(w http.ResponseWriter, r *http.Request) {
+	since := time.Now().Add(-24 * time.Hour)
+	summary, err := a.store.AnalyticsSummary(r.Context(), since)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load analytics"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"since": since, "routes": summary})
 }
 
 func (a *API) forceReload(w http.ResponseWriter, _ *http.Request) {

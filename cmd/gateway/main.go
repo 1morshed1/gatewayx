@@ -44,8 +44,10 @@ func main() {
 		runErr = runMigrate(ctx, cfg, log)
 	case "seed":
 		runErr = runSeed(ctx, cfg, log)
+	case "analytics":
+		runErr = runAnalytics(ctx, cfg, log)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q (want: serve|migrate|seed)\n", cmd)
+		fmt.Fprintf(os.Stderr, "unknown command %q (want: serve|migrate|seed|analytics)\n", cmd)
 		os.Exit(2)
 	}
 

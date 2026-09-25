@@ -37,6 +37,19 @@ type Balancer interface {
 	Release(route *domain.Route, up *domain.Upstream)
 }
 
+// Emitter receives one analytics event per request. Implemented by the analytics
+// package (phase 7). It MUST be non-blocking — the request path never waits on
+// analytics.
+type Emitter interface {
+	Emit(domain.RequestLog)
+}
+
+// NopEmitter discards events. Default when analytics is disabled.
+type NopEmitter struct{}
+
+// Emit implements Emitter.
+func (NopEmitter) Emit(domain.RequestLog) {}
+
 // --- No-op / trivial defaults ----------------------------------------------
 
 // nopChain runs no plugins. Used until the real plugin chain is wired in.

@@ -41,12 +41,15 @@ type Gateway struct {
 	log       *slog.Logger
 	proxy     *httputil.ReverseProxy
 	transport http.RoundTripper
+	emitter   Emitter
 }
 
 // Options configures a Gateway. Kept separate from config.Config so the proxy
 // package doesn't import config (keeps dependencies pointing one way).
 type Options struct {
 	DefaultTimeout time.Duration
+	// Emitter receives one analytics event per request. Defaults to NopEmitter.
+	Emitter Emitter
 }
 
 // New builds a Gateway. Pass real implementations of ChainFactory and Balancer as
@@ -56,6 +59,10 @@ func New(router *Router, chains ChainFactory, lb Balancer, transport http.RoundT
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
+	emitter := opts.Emitter
+	if emitter == nil {
+		emitter = NopEmitter{}
+	}
 	g := &Gateway{
 		router:    router,
 		chains:    chains,
@@ -63,6 +70,7 @@ func New(router *Router, chains ChainFactory, lb Balancer, transport http.RoundT
 		cfg:       opts,
 		log:       log,
 		transport: transport,
+		emitter:   emitter,
 	}
 
 	// A single ReverseProxy instance serves all upstreams. The per-request
@@ -84,10 +92,15 @@ func (g *Gateway) Router() *Router { return g.router }
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
+	// Wrap the writer so we can record the final status + bytes for analytics,
+	// regardless of which path (404 / abort / proxy / breaker) writes the response.
+	rec := &recorder{ResponseWriter: w}
+
 	// 1. Route matching.
 	route := g.router.Match(hostOnly(r.Host), r.URL.Path)
 	if route == nil {
-		g.writeJSON(w, http.StatusNotFound, map[string]string{"error": "no route matched"})
+		g.writeJSON(rec, http.StatusNotFound, map[string]string{"error": "no route matched"})
+		g.emit(r, nil, nil, "", rec, start)
 		return
 	}
 
@@ -97,15 +110,17 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	chain.OnRequest(rc)
 	if rc.Aborted() {
 		status, body := rc.AbortResult()
-		copyHeaders(w.Header(), rc.ResponseHeaders())
-		g.writeJSON(w, status, body)
+		copyHeaders(rec.Header(), rc.ResponseHeaders())
+		g.writeJSON(rec, status, body)
+		g.emit(r, route, rc.Consumer, "", rec, start)
 		return
 	}
 
 	// 3. Pick an upstream via the load balancer.
 	up, err := g.lb.Pick(route, r)
 	if err != nil {
-		g.writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "no healthy upstream"})
+		g.writeJSON(rec, http.StatusServiceUnavailable, map[string]string{"error": "no healthy upstream"})
+		g.emit(r, route, rc.Consumer, "", rec, start)
 		return
 	}
 	defer g.lb.Release(route, up)
@@ -113,9 +128,13 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	target, err := url.Parse(up.URL)
 	if err != nil {
 		g.log.Error("bad upstream url", "url", up.URL, "err", err)
-		g.writeJSON(w, http.StatusBadGateway, map[string]string{"error": "bad upstream configuration"})
+		g.writeJSON(rec, http.StatusBadGateway, map[string]string{"error": "bad upstream configuration"})
+		g.emit(r, route, rc.Consumer, up.URL, rec, start)
 		return
 	}
+
+	// Emit once the proxied response has been fully written.
+	defer g.emit(r, route, rc.Consumer, up.URL, rec, start)
 
 	// 4. Apply the per-route timeout to the outbound request.
 	timeout := g.cfg.DefaultTimeout
@@ -132,7 +151,31 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 5. Stash per-request state for the proxy callbacks and serve.
 	st := &requestState{rc: rc, route: route, target: target, up: up, chain: chain, start: start}
 	ctx = context.WithValue(ctx, stateKey, st)
-	g.proxy.ServeHTTP(w, r.WithContext(ctx))
+	g.proxy.ServeHTTP(rec, r.WithContext(ctx))
+}
+
+// emit builds and fires the analytics event. It reads the recorded status/bytes and
+// the request-id set by the request-id plugin (if present). Emit is non-blocking.
+func (g *Gateway) emit(r *http.Request, route *domain.Route, consumer *domain.Consumer, upstream string, rec *recorder, start time.Time) {
+	log := domain.RequestLog{
+		Time:       start,
+		Method:     r.Method,
+		Path:       r.URL.Path,
+		Status:     rec.statusOrDefault(),
+		Upstream:   upstream,
+		DurationMs: time.Since(start).Milliseconds(),
+		ClientIP:   clientIP(r),
+		BytesOut:   rec.bytes,
+	}
+	log.RequestID = r.Header.Get("X-Request-ID")
+	if route != nil {
+		log.RouteID = route.ID
+		log.RouteName = route.Name
+	}
+	if consumer != nil {
+		log.ConsumerID = consumer.ID
+	}
+	g.emitter.Emit(log)
 }
 
 // rewrite is called by ReverseProxy to build the outbound request. It points the
@@ -209,6 +252,56 @@ func (g *Gateway) writeJSON(w http.ResponseWriter, status int, body any) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// recorder wraps http.ResponseWriter to capture the status code and byte count for
+// analytics, without changing behaviour. It transparently delegates everything.
+type recorder struct {
+	http.ResponseWriter
+	status int
+	bytes  int64
+}
+
+func (r *recorder) WriteHeader(status int) {
+	if r.status == 0 {
+		r.status = status
+	}
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *recorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK // implicit 200 on first write, like net/http
+	}
+	n, err := r.ResponseWriter.Write(b)
+	r.bytes += int64(n)
+	return n, err
+}
+
+// Flush forwards to the underlying writer if it supports flushing, so streaming /
+// SSE responses from upstreams aren't buffered by the recorder wrapper.
+func (r *recorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (r *recorder) statusOrDefault() int {
+	if r.status == 0 {
+		return http.StatusOK
+	}
+	return r.status
+}
+
+// clientIP extracts the caller IP, preferring X-Forwarded-For.
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return xff
+	}
+	if i := strings.LastIndexByte(r.RemoteAddr, ':'); i >= 0 {
+		return r.RemoteAddr[:i]
+	}
+	return r.RemoteAddr
 }
 
 // copyHeaders copies all values from src into dst. No-op when src is nil.

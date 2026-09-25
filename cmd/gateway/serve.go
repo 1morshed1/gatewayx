@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/1morshed1/gatewayx/internal/admin"
+	"github.com/1morshed1/gatewayx/internal/analytics"
 	"github.com/1morshed1/gatewayx/internal/circuitbreaker"
 	"github.com/1morshed1/gatewayx/internal/config"
 	"github.com/1morshed1/gatewayx/internal/loadbalancer"
@@ -60,13 +61,22 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	})
 	transport := circuitbreaker.NewTransport(newUpstreamTransport(cfg), cbMgr)
 
+	// --- analytics producer (fire-and-forget to Kafka) ---
+	var emitter proxy.Emitter = proxy.NopEmitter{}
+	if cfg.KafkaEnabled {
+		ke := analytics.NewKafkaEmitter(cfg.KafkaBrokers, cfg.KafkaTopic, 10000, log)
+		defer ke.Close()
+		emitter = ke
+		log.Info("analytics enabled", "topic", cfg.KafkaTopic, "brokers", cfg.KafkaBrokers)
+	}
+
 	// --- gateway core ---
 	gw := proxy.New(
 		router,
 		chains,
 		loadbalancer.New(),
 		transport,
-		proxy.Options{DefaultTimeout: cfg.UpstreamTimeout},
+		proxy.Options{DefaultTimeout: cfg.UpstreamTimeout, Emitter: emitter},
 		log,
 	)
 
