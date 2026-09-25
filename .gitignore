@@ -1,0 +1,27 @@
+# Binaries
+/bin/
+gatewayx
+/echo
+/gateway
+*.exe
+*.out
+
+# Go
+*.test
+coverage.out
+coverage.html
+vendor/
+
+# Env / secrets
+.env
+.env.local
+*.local
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Docker volumes (if bind-mounted locally)
+/deploy/data/

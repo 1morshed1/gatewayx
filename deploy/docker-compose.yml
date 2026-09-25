@@ -1,0 +1,102 @@
+# docker-compose for the GatewayX local development stack.
+#
+# Brings up every backing service the gateway depends on:
+#   - postgres : route/plugin/api-key configuration + aggregated analytics
+#   - redis    : rate-limit counters and shared circuit-breaker state
+#   - kafka    : request-log stream (KRaft mode, no ZooKeeper needed)
+#   - upstreams: two demo backend services so you can proxy to something real
+#
+# Usage (from repo root):
+#   make infra-up      # start everything
+#   make infra-down    # stop and remove
+#
+# Nothing here binds to privileged ports; everything is on localhost.
+
+name: gatewayx
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gatewayx-postgres
+    environment:
+      POSTGRES_USER: gatewayx
+      POSTGRES_PASSWORD: gatewayx
+      POSTGRES_DB: gatewayx
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gatewayx -d gatewayx"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: gatewayx-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: gatewayx-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft single-node config (broker + controller in one process).
+      KAFKA_CFG_NODE_ID: "0"
+      KAFKA_CFG_PROCESS_ROLES: "controller,broker"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "0@kafka:9093"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://localhost:9092"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafkadata:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---- Demo upstream services -------------------------------------------------
+  # Two instances of the same tiny echo server (built from cmd/echo). They let
+  # you exercise routing and load balancing without needing real backends.
+  upstream-a:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.echo
+    container_name: gatewayx-upstream-a
+    environment:
+      ECHO_NAME: "upstream-a"
+      ECHO_PORT: "8080"
+    ports:
+      - "9001:8080"
+
+  upstream-b:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.echo
+    container_name: gatewayx-upstream-b
+    environment:
+      ECHO_NAME: "upstream-b"
+      ECHO_PORT: "8080"
+    ports:
+      - "9002:8080"
+
+volumes:
+  pgdata:
+  redisdata:
+  kafkadata:
