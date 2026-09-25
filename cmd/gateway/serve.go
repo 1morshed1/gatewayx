@@ -12,6 +12,7 @@ import (
 	"github.com/1morshed1/gatewayx/internal/circuitbreaker"
 	"github.com/1morshed1/gatewayx/internal/config"
 	"github.com/1morshed1/gatewayx/internal/loadbalancer"
+	"github.com/1morshed1/gatewayx/internal/observability"
 	"github.com/1morshed1/gatewayx/internal/plugin"
 	"github.com/1morshed1/gatewayx/internal/proxy"
 	"github.com/1morshed1/gatewayx/internal/redisx"
@@ -70,13 +71,16 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 		log.Info("analytics enabled", "topic", cfg.KafkaTopic, "brokers", cfg.KafkaBrokers)
 	}
 
+	// --- metrics ---
+	metrics := observability.NewMetrics()
+
 	// --- gateway core ---
 	gw := proxy.New(
 		router,
 		chains,
 		loadbalancer.New(),
 		transport,
-		proxy.Options{DefaultTimeout: cfg.UpstreamTimeout, Emitter: emitter},
+		proxy.Options{DefaultTimeout: cfg.UpstreamTimeout, Emitter: emitter, Metrics: metrics},
 		log,
 	)
 
@@ -121,8 +125,15 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 		Handler:           adminAPI.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", metrics.Handler())
+	metricsSrv := &http.Server{
+		Addr:              cfg.MetricsAddr,
+		Handler:           metricsMux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 	go func() {
 		log.Info("gateway listening", "addr", cfg.GatewayAddr)
 		if err := gatewaySrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -132,6 +143,12 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	go func() {
 		log.Info("admin listening", "addr", cfg.AdminAddr)
 		if err := adminSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+	}()
+	go func() {
+		log.Info("metrics listening", "addr", cfg.MetricsAddr)
+		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
@@ -149,6 +166,7 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	defer cancel()
 	_ = gatewaySrv.Shutdown(shutdownCtx)
 	_ = adminSrv.Shutdown(shutdownCtx)
+	_ = metricsSrv.Shutdown(shutdownCtx)
 	log.Info("stopped")
 	return nil
 }

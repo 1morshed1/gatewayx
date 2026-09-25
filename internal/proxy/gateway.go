@@ -42,6 +42,7 @@ type Gateway struct {
 	proxy     *httputil.ReverseProxy
 	transport http.RoundTripper
 	emitter   Emitter
+	metrics   Metrics
 }
 
 // Options configures a Gateway. Kept separate from config.Config so the proxy
@@ -50,6 +51,8 @@ type Options struct {
 	DefaultTimeout time.Duration
 	// Emitter receives one analytics event per request. Defaults to NopEmitter.
 	Emitter Emitter
+	// Metrics records per-request telemetry. Defaults to NopMetrics.
+	Metrics Metrics
 }
 
 // New builds a Gateway. Pass real implementations of ChainFactory and Balancer as
@@ -63,6 +66,10 @@ func New(router *Router, chains ChainFactory, lb Balancer, transport http.RoundT
 	if emitter == nil {
 		emitter = NopEmitter{}
 	}
+	metrics := opts.Metrics
+	if metrics == nil {
+		metrics = NopMetrics{}
+	}
 	g := &Gateway{
 		router:    router,
 		chains:    chains,
@@ -71,6 +78,7 @@ func New(router *Router, chains ChainFactory, lb Balancer, transport http.RoundT
 		log:       log,
 		transport: transport,
 		emitter:   emitter,
+		metrics:   metrics,
 	}
 
 	// A single ReverseProxy instance serves all upstreams. The per-request
@@ -176,6 +184,7 @@ func (g *Gateway) emit(r *http.Request, route *domain.Route, consumer *domain.Co
 		log.ConsumerID = consumer.ID
 	}
 	g.emitter.Emit(log)
+	g.metrics.ObserveRequest(log.RouteName, log.Status, time.Since(start))
 }
 
 // rewrite is called by ReverseProxy to build the outbound request. It points the

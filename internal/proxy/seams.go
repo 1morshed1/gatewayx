@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/1morshed1/gatewayx/internal/domain"
 )
@@ -49,6 +50,17 @@ type NopEmitter struct{}
 
 // Emit implements Emitter.
 func (NopEmitter) Emit(domain.RequestLog) {}
+
+// Metrics records per-request telemetry. Implemented by the observability package.
+type Metrics interface {
+	ObserveRequest(route string, status int, dur time.Duration)
+}
+
+// NopMetrics records nothing. Default when metrics are disabled.
+type NopMetrics struct{}
+
+// ObserveRequest implements Metrics.
+func (NopMetrics) ObserveRequest(string, int, time.Duration) {}
 
 // --- No-op / trivial defaults ----------------------------------------------
 
