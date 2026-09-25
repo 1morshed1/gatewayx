@@ -9,6 +9,7 @@ import (
 
 	"github.com/1morshed1/gatewayx/internal/circuitbreaker"
 	"github.com/1morshed1/gatewayx/internal/config"
+	"github.com/1morshed1/gatewayx/internal/loadbalancer"
 	"github.com/1morshed1/gatewayx/internal/plugin"
 	"github.com/1morshed1/gatewayx/internal/proxy"
 	"github.com/1morshed1/gatewayx/internal/redisx"
@@ -59,11 +60,10 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	transport := circuitbreaker.NewTransport(newUpstreamTransport(cfg), cbMgr)
 
 	// --- gateway core ---
-	// TODO(phase 5): swap FirstHealthyBalancer for the real load balancer.
 	gw := proxy.New(
 		router,
 		chains,
-		proxy.FirstHealthyBalancer{},
+		loadbalancer.New(),
 		transport,
 		proxy.Options{DefaultTimeout: cfg.UpstreamTimeout},
 		log,
