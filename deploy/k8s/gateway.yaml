@@ -1,0 +1,158 @@
+# GatewayX Kubernetes manifests (illustrative).
+#
+# These assume Postgres, Redis and Kafka already exist in the cluster (managed
+# services or their own charts) and are reachable at the hostnames in the
+# ConfigMap. The gateway itself is stateless (all shared state lives in
+# Redis/Postgres), so it scales horizontally — that's the whole point of putting
+# rate-limit and circuit-breaker state in Redis (docs 04/05).
+#
+# Apply order: Secret + ConfigMap, then the migrate Job, then the Deployment.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatewayx-config
+data:
+  GATEWAY_ADDR: ":8000"
+  ADMIN_ADDR: ":8001"
+  METRICS_ADDR: ":9100"
+  REDIS_ADDR: "redis:6379"
+  KAFKA_BROKERS: "kafka:9092"
+  KAFKA_TOPIC: "request-logs"
+  KAFKA_ENABLED: "true"
+  CONFIG_RELOAD_MODE: "listen"
+  LOG_LEVEL: "info"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gatewayx-secrets
+type: Opaque
+stringData:
+  # In real life these come from your secret manager, not a committed file.
+  POSTGRES_DSN: "postgres://gatewayx:gatewayx@postgres:5432/gatewayx?sslmode=disable"
+  ADMIN_TOKEN: "change-me"
+---
+# One-shot migration job. Run before rolling out a new schema.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gatewayx-migrate
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: gatewayx:latest
+          args: ["migrate"]
+          envFrom:
+            - configMapRef: { name: gatewayx-config }
+            - secretRef: { name: gatewayx-secrets }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gatewayx
+  labels: { app: gatewayx }
+spec:
+  replicas: 3 # stateless -> scale freely; limits/breaker stay correct via Redis
+  selector:
+    matchLabels: { app: gatewayx }
+  template:
+    metadata:
+      labels: { app: gatewayx }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: gateway
+          image: gatewayx:latest
+          args: ["serve"]
+          ports:
+            - { name: http, containerPort: 8000 }
+            - { name: admin, containerPort: 8001 }
+            - { name: metrics, containerPort: 9100 }
+          envFrom:
+            - configMapRef: { name: gatewayx-config }
+            - secretRef: { name: gatewayx-secrets }
+          readinessProbe:
+            httpGet: { path: /healthz, port: admin }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: admin }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "250m", memory: "128Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
+---
+# Public traffic only. The admin port is intentionally NOT exposed here — keep it
+# internal (ClusterIP + network policy / VPN), never on the public LB.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gatewayx
+spec:
+  type: LoadBalancer
+  selector: { app: gatewayx }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+# Internal-only service for the admin API.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gatewayx-admin
+spec:
+  type: ClusterIP
+  selector: { app: gatewayx }
+  ports:
+    - { name: admin, port: 8001, targetPort: admin }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gatewayx
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gatewayx
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+---
+# The analytics consumer runs as its own Deployment so it scales/fails independently
+# of the data plane (see doc 08). Scale replicas up to the topic's partition count.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gatewayx-analytics
+  labels: { app: gatewayx-analytics }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: gatewayx-analytics }
+  template:
+    metadata:
+      labels: { app: gatewayx-analytics }
+    spec:
+      containers:
+        - name: analytics
+          image: gatewayx:latest
+          args: ["analytics"]
+          envFrom:
+            - configMapRef: { name: gatewayx-config }
+            - secretRef: { name: gatewayx-secrets }
+          resources:
+            requests: { cpu: "100m", memory: "64Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }

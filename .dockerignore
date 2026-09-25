@@ -1,0 +1,11 @@
+# Keep the build context small and the image clean.
+.git
+bin/
+*.md
+docs/
+test/
+deploy/data/
+.env
+.env.local
+coverage.out
+coverage.html

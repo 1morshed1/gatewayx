@@ -88,6 +88,43 @@ test/k6/       load-test scenarios
 docs/          learning write-ups, one per phase / concept
 ```
 
+## Observability
+
+- Prometheus metrics at `:9100/metrics` (RED: rate, errors, duration per route).
+- Structured JSON logs (`slog`) on stdout.
+- Per-request analytics streamed to Kafka and rolled up into Postgres; read a
+  per-route report at `GET :8001/admin/analytics`.
+
+## Load testing
+
+[k6](https://k6.io) scenarios live in `test/k6/` and self-provision their routes via
+the admin API:
+
+```bash
+k6 run test/k6/throughput.js          # throughput + latency overhead
+k6 run test/k6/ratelimit_accuracy.js  # proves the limiter admits exactly N
+```
+
+The limiter's accuracy holds under real concurrency — 300 requests at concurrency
+60 against a 50/10s limit yields **exactly 50 × 200 and 250 × 429**. See
+[`docs/10-load-testing.md`](docs/10-load-testing.md).
+
+## Deployment
+
+Build the image and run one-shot / long-running roles from the same binary:
+
+```bash
+docker build -f deploy/Dockerfile -t gatewayx:latest .
+docker run gatewayx:latest migrate       # apply schema
+docker run gatewayx:latest serve         # run the gateway
+docker run gatewayx:latest analytics     # run the analytics consumer
+```
+
+Kubernetes manifests (Deployment, Services, migrate Job, HPA, analytics consumer)
+are in [`deploy/k8s/gateway.yaml`](deploy/k8s/gateway.yaml). The gateway is
+stateless — all shared state is in Redis/Postgres — so it scales horizontally while
+rate limits and circuit breakers stay globally correct.
+
 ## Documentation index
 
 The `docs/` folder is the learning trail. Each file explains *what* was built and
