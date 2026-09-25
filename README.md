@@ -94,6 +94,9 @@ docs/          learning write-ups, one per phase / concept
 - Structured JSON logs (`slog`) on stdout.
 - Per-request analytics streamed to Kafka and rolled up into Postgres; read a
   per-route report at `GET :8001/admin/analytics`.
+- Heavy batch analytics (daily reports, top consumers, latency percentiles) via a
+  Spark job over the same topic — `spark/usage_report.py` (see
+  [`docs/12-spark-analytics.md`](docs/12-spark-analytics.md)).
 
 ## Load testing
 

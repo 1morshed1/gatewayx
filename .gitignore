@@ -25,3 +25,9 @@ vendor/
 
 # Docker volumes (if bind-mounted locally)
 /deploy/data/
+
+# Spark
+spark-out/
+spark/.venv/
+__pycache__/
+*.pyc

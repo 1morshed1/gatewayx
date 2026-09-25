@@ -1,0 +1,3 @@
+# For running the usage report locally (a machine with Java 11/17 installed).
+# In a cluster you don't pip-install Spark — you submit to the cluster's runtime.
+pyspark==3.5.1
