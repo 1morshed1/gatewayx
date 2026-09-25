@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/1morshed1/gatewayx/internal/config"
+	"github.com/1morshed1/gatewayx/internal/plugin"
 	"github.com/1morshed1/gatewayx/internal/proxy"
 	"github.com/1morshed1/gatewayx/internal/store"
 )
@@ -35,12 +36,16 @@ func runServe(ctx context.Context, cfg *config.Config, log *slog.Logger) error {
 	router.Update(routes)
 	log.Info("loaded routes", "count", len(routes))
 
+	// --- plugin system ---
+	registry := buildRegistry(pluginDeps{log: log})
+	chains := plugin.NewChainFactory(registry, log)
+	log.Info("registered plugins", "plugins", registry.Names())
+
 	// --- gateway core ---
-	// TODO(phase 3+): swap NopChainFactory for the real plugin chain, and
-	// FirstHealthyBalancer for the load balancer.
+	// TODO(phase 5): swap FirstHealthyBalancer for the real load balancer.
 	gw := proxy.New(
 		router,
-		proxy.NopChainFactory{},
+		chains,
 		proxy.FirstHealthyBalancer{},
 		newUpstreamTransport(cfg),
 		proxy.Options{DefaultTimeout: cfg.UpstreamTimeout},

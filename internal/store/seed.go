@@ -51,5 +51,14 @@ func (s *Store) SeedDemo(ctx context.Context) error {
 		}
 	}
 
+	// Plugins: enable the request-id plugin so every proxied request gets a
+	// correlation header. More plugins are added to this demo in later phases.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO route_plugins (route_id, name, enabled, config)
+		VALUES ($1, 'request-id', true, '{"header":"X-Request-ID"}'::jsonb)`,
+		routeID); err != nil {
+		return fmt.Errorf("seed plugin request-id: %w", err)
+	}
+
 	return tx.Commit(ctx)
 }
