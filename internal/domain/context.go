@@ -7,7 +7,7 @@ import "net/http"
 // read the request, learn which route/consumer/upstream applies, share state via
 // Metadata, and short-circuit the request via Abort.
 //
-// Design note: rather than a func field for Abort (as the plan sketched), we use
+// Design note: rather than a func field for Abort (as the spec sketched), we use
 // methods over private fields. That keeps the abort decision recorded on the
 // context itself, so the proxy can inspect it after each plugin runs — no hidden
 // control flow through captured closures.

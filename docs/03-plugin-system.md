@@ -45,7 +45,7 @@ embeds it.
 
 ## Big decision: compiled-in plugins, not `.so` files
 
-The plan says "load it at runtime". Go *does* have a `plugin` package that loads
+The spec says "load it at runtime". Go *does* have a `plugin` package that loads
 `.so` files, but it is a well-known foot-gun:
 
 - the plugin and host must be built with the **exact** same toolchain version and
@@ -112,7 +112,7 @@ config shouldn't take the whole route down.
 
 ## Where circuit breaking and load balancing live (and why not here)
 
-The plan lists the circuit breaker as a plugin. We deliberately **don't** implement
+The spec lists the circuit breaker as a plugin. We deliberately **don't** implement
 it as a chain plugin:
 
 - The **load balancer** isn't a plugin either — it's the `Balancer` seam, because

@@ -103,7 +103,7 @@ outlive a deleted route.
 The admin API exposes `GET /admin/analytics` (last 24h), which runs
 `store.AnalyticsSummary`: per-route request count, error count (5xx), error rate,
 and average latency, ordered by volume. That's the "top consumers / error rates by
-route" report from the plan, straight out of SQL.
+route" report from the spec, straight out of SQL.
 
 ## A real gotcha we hit: single-node Kafka & the offsets topic
 

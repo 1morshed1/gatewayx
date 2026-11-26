@@ -1,6 +1,6 @@
 # 11 — The transform plugin
 
-The plan's plugin set includes a **Request Transform Plugin**. This is it. Transform
+The spec's plugin set includes a **Request Transform Plugin**. This is it. Transform
 plugins let you reshape traffic without touching the upstream service — the gateway
 becomes the place you adapt requests and responses to whatever a client or backend
 needs.

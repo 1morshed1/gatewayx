@@ -22,7 +22,7 @@ import (
 
 // slidingWindowScript performs the whole check-and-record atomically in Redis.
 //
-// Why a Lua script instead of the pipeline the plan sketched: a pipeline runs
+// Why a Lua script instead of the pipeline the spec sketched: a pipeline runs
 // ZCARD (count) and then ZADD (record) as separate steps. Between them, other
 // requests can slip in — a classic time-of-check/time-of-use race that lets the
 // limit be exceeded under concurrency. A Lua script runs atomically on the Redis

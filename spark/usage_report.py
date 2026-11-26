@@ -2,7 +2,7 @@
 """
 GatewayX usage report — a Spark BATCH job over the `request-logs` Kafka topic.
 
-This is the analytics job the plan calls for: it reads every request-log event the
+This is the analytics job the spec calls for: it reads every request-log event the
 gateway has produced and computes daily usage reports, top consumers, error rates by
 route, and latency percentiles. It complements the always-on Go consumer (which
 keeps a live rollup in Postgres, see docs/08); Spark is the tool when you want heavy,

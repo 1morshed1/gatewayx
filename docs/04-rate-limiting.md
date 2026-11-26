@@ -63,9 +63,9 @@ ZCARD key                             -- how many remain?
 if count < limit: ZADD key now member; PEXPIRE key window
 ```
 
-### Why a Lua script, not the pipeline the plan sketched
+### Why a Lua script, not the pipeline the spec sketched
 
-The plan used a Redis *pipeline*: `ZREMRANGEBYSCORE`, `ZCARD`, `ZADD`, `EXPIRE`.
+The spec used a Redis *pipeline*: `ZREMRANGEBYSCORE`, `ZCARD`, `ZADD`, `EXPIRE`.
 Pipelining batches network round-trips but **does not make the steps atomic**.
 Between `ZCARD` (count) and `ZADD` (record), other requests can run their own
 `ZADD`, so several requests all see "count = 49 < 50" and all get admitted — the
@@ -90,7 +90,7 @@ silently undercounting. So the member is `timestamp + random suffix`.
 
 - **Key** = `ratelimit:consumer:{id}:{route}` when authenticated, else
   `ratelimit:ip:{ip}:{route}`. So limits are **per consumer, per route** — exactly
-  the granularity the plan calls for.
+  the granularity the spec calls for.
 - On allow: sets `X-RateLimit-Limit` / `X-RateLimit-Remaining` (via the request
   context's response-header accumulator, since the response isn't built yet).
 - On block: sets `Retry-After` and aborts with `429`.

@@ -2,7 +2,7 @@
 // traffic as it flows through the gateway: add/set/remove headers, rewrite the
 // path, and (opt-in) find-and-replace in the body.
 //
-// This is the "Request Transform Plugin" from the plan. It runs at
+// This is the "Request Transform Plugin" from the spec. It runs at
 // PriorityTransform (after auth + rate limit) so it operates on the final, allowed
 // request just before it is proxied; on the response side it runs first (reverse
 // order) so it decorates the upstream reply before other plugins see it.

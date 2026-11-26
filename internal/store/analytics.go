@@ -54,7 +54,7 @@ type RouteSummary struct {
 }
 
 // AnalyticsSummary returns per-route totals since a given time, ordered by request
-// volume. This is the "top consumers / error rates by route" report the plan calls
+// volume. This is the "top consumers / error rates by route" report the spec calls
 // for, computed straight from the aggregate table.
 func (s *Store) AnalyticsSummary(ctx context.Context, since time.Time) ([]RouteSummary, error) {
 	rows, err := s.pool.Query(ctx, `

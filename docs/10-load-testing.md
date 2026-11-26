@@ -8,7 +8,7 @@ Files: `test/k6/throughput.js`, `test/k6/ratelimit_accuracy.js`.
 
 ## What we measure and why
 
-The plan sets four targets. Each maps to a thing an operator genuinely cares about:
+The spec sets four targets. Each maps to a thing an operator genuinely cares about:
 
 | Test | Question | Target |
 |---|---|---|

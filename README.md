@@ -1,5 +1,8 @@
 # GatewayX — a programmable API gateway (Mini-Kong)
 
+[![CI](https://github.com/1morshed1/gatewayx/actions/workflows/ci.yml/badge.svg)](https://github.com/1morshed1/gatewayx/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 GatewayX is a from-scratch **API gateway** written in Go. It sits in front of your
 backend services and gives every request the cross-cutting behaviour you would
 otherwise re-implement in each service: authentication, rate limiting, request
@@ -7,9 +10,8 @@ transformation, circuit breaking, load balancing, and analytics — all driven b
 a **plugin chain** and configurable at runtime through an **Admin API**.
 
 This is *infrastructure* software: the kind of component every request in a
-microservices architecture flows through. It is built as a learning project, so
-the code is documented heavily and every design decision is written up in
-[`docs/`](docs/).
+microservices architecture flows through. The code is documented heavily
+and every design decision is written up in [`docs/`](docs/).
 
 > New here? Start with [`docs/00-architecture.md`](docs/00-architecture.md), then
 > read the numbered docs in order — they follow the build phase by phase.
@@ -136,4 +138,4 @@ the running index.
 
 ## License
 
-MIT — this is a learning project, use it however helps you learn.
+[MIT](LICENSE)

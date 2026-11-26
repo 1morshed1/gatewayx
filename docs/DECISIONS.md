@@ -3,7 +3,7 @@
 Architecture Decision Records (ADRs), lightweight. Each entry: the decision, the
 context, the alternatives, and why. Newest decisions are appended at the bottom.
 
-The point of this file for a learning project: **the reasoning is the lesson.**
+The point of this file: **the reasoning matters as much as the code.**
 Anyone can copy code; the value is in knowing *why* it's shaped that way.
 
 ---
@@ -24,11 +24,11 @@ Go hits the sweet spot of performance + simplicity for this class of software.
 **Decision:** Plugins implement a Go interface and are registered in a registry at
 build time, rather than being loaded from `.so` files at runtime.
 
-**Context:** The plan mentions "load it at runtime". Go *does* have a `plugin`
+**Context:** The spec mentions "load it at runtime". Go *does* have a `plugin`
 package, but it's notoriously fragile: exact toolchain/version match required,
 Linux/macOS only, no unloading, and easy to crash the host process.
 
-**Why compiled-in:** For a learning project we want to teach the *chain/middleware
+**Why compiled-in:** The goal is the *chain/middleware
 pattern* and per-route plugin *configuration*, which is the genuinely interesting
 part. Plugins are still "loaded at runtime" in the sense that a route decides
 which plugins run and with what config, hot-reloadable from the DB. We get the

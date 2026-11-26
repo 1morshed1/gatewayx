@@ -36,7 +36,7 @@ Hystrix/resilience4j implement.
 
 ## Design decision: transport middleware, not a plugin
 
-The plan lists the breaker as a plugin, but we implement it as an
+The spec lists the breaker as a plugin, but we implement it as an
 `http.RoundTripper` that wraps the proxy's transport (`circuitbreaker/transport.go`).
 
 Why: a chain plugin runs *before* proxying — it can't see whether the upstream

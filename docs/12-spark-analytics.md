@@ -1,6 +1,6 @@
 # 12 — Spark analytics batch job
 
-The plan calls for "a Spark batch job computing daily API usage reports, top
+The spec calls for "a Spark batch job computing daily API usage reports, top
 consumers, error rates by route" over the `request-logs` topic. This phase delivers
 exactly that.
 

@@ -24,7 +24,7 @@ The key types:
 
 ### Why `Abort` is a method, not a callback
 
-The plan sketched `Abort` as a `func` field on the context. We made it a **method
+The spec sketched `Abort` as a `func` field on the context. We made it a **method
 over private fields** instead:
 
 ```go

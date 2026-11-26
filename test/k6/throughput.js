@@ -1,6 +1,6 @@
 // k6 throughput + latency-overhead benchmark for GatewayX.
 //
-// Goal (from the plan):
+// Goal (from the spec):
 //   - Throughput: how many req/s can the gateway proxy?
 //   - Latency overhead: p99 the gateway adds on top of the upstream.
 //
@@ -35,7 +35,7 @@ export const options = {
     },
   },
   thresholds: {
-    // Target from the plan: <5ms p99 gateway overhead. Against the local echo
+    // Target from the spec: <5ms p99 gateway overhead. Against the local echo
     // upstream, total p99 tracks overhead closely. Loosen if your upstream is slow.
     http_req_duration: ['p(99)<15'],
     http_req_failed: ['rate<0.01'],

@@ -1,6 +1,6 @@
 // k6 rate-limiter accuracy test for GatewayX.
 //
-// Goal (from the plan): send a known rate above the limit and verify the limiter
+// Goal (from the spec): send a known rate above the limit and verify the limiter
 // admits ~exactly the configured number, no more, no fewer. This validates the
 // sliding-window algorithm under real concurrency (the thing a naive pipeline gets
 // wrong — see doc 04).
